@@ -813,12 +813,32 @@ func (f *FlagSet) Parse(arguments []string) error {
 	}
 
 	// Parse environment variables
-	f.ParseEnv(os.Environ())
+	if err := f.ParseEnv(os.Environ()); err != nil {
+		switch f.errorHandling {
+		case ContinueOnError:
+			return err
+		case ExitOnError:
+			os.Exit(2)
+		case PanicOnError:
+			panic(err)
+		}
+		return err
+	}
 
 	// Parse configuration from file
 	configFlag := f.actual["config"]
 	if configFlag != nil {
-		f.ParseFile(configFlag.Value.String())
+		if err := f.ParseFile(configFlag.Value.String()); err != nil {
+			switch f.errorHandling {
+			case ContinueOnError:
+				return err
+			case ExitOnError:
+				os.Exit(2)
+			case PanicOnError:
+				panic(err)
+			}
+			return err
+		}
 	}
 
 	return nil
@@ -881,10 +901,6 @@ func (f *FlagSet) ParseEnv(environ []string) error {
 				fv.Set("true")
 			}
 		} else {
-			if !hasValue {
-				return f.failf("environment variable needs an value: %s", name)
-			}
-
 			if err := flag.Value.Set(value); err != nil {
 				return f.failf("invalid value %q for environment variable %s: %v", value, name, err)
 			}
@@ -963,10 +979,6 @@ func (f *FlagSet) ParseFile(path string) error {
 				fv.Set("true")
 			}
 		} else {
-			if !hasValue {
-				return f.failf("configuration variable needs an argument: %s", name)
-			}
-
 			if err := flag.Value.Set(value); err != nil {
 				return f.failf("invalid value %q for configuration variable %s: %v", value, name, err)
 			}
